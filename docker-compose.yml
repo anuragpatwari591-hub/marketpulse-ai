@@ -1,0 +1,62 @@
+version: "3.9"
+
+# NOTE: the backend currently runs entirely in demo mode using in-memory
+# generated data - it does NOT require postgres/redis to function today.
+# Both services are included here because the architecture (see
+# ARCHITECTURE.md) targets them for persistence/caching in a later stage;
+# they are safe to leave running idle.
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=http://localhost:3000
+      - MARKET_DATA_PROVIDER=demo
+      - NEWS_PROVIDER=demo
+      - LLM_PROVIDER=demo
+      - DATABASE_URL=postgresql://marketpulse:marketpulse@postgres:5432/marketpulse
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=marketpulse
+      - POSTGRES_PASSWORD=marketpulse
+      - POSTGRES_DB=marketpulse
+    ports:
+      - "5432:5432"
+    volumes:
+      - marketpulse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketpulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  marketpulse_pgdata:
